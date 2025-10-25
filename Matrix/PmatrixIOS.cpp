@@ -11,7 +11,7 @@ pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
 // N matrix
 // k blok size
 
-//КОММЕНТ ДЛЯ ПРОВЕРЯЮЩЕГО
+//КОММЕНТ ДЛЯ ПРОВЕРЯЩЕГО
 //я не стала выводить зависимость времени для всех размеров блоков от 1 до N
 //тк тестила на очень больших числах (до 1000) и выводить 1000 строчек ну такое себе
 //поэтому сам выбирай размер блока и смотри
@@ -26,34 +26,43 @@ void matrixPrint(int N, const vector<vector<int>>& A){
 }
 
 struct ThreadData {
-    int rowStart;
-    int colStart;
     int k;
     int N;
     const vector<vector<int>>* A;
     const vector<vector<int>>* B;
     vector<vector<int>>* C;
+    int Ai;
+    int Bj;
+    int At;
 };
 
 void* multiBlok(void* smth) {
     ThreadData* data = (ThreadData*)smth;
     
-    int rowStart = data->rowStart;
-    int colStart = data->colStart;
+    int Ai = data->Ai;
+    int Bj = data->Bj;
+    int At = data->At;
     int k = data->k;
     int N = data->N;
     const vector<vector<int>>& A = *(data->A);
     const vector<vector<int>>& B = *(data->B);
     vector<vector<int>>& C = *(data->C);
     
-    for (int i = rowStart; i < rowStart + k && i < N; i++) {
-        for (int j = colStart; j < colStart + k && j < N; j++) {
+    int rowStartA = Ai * k;
+    int colStartA = At * k;
+    int rowStartB = At * k;
+    int colStartB = Bj * k;
+    int rowStartC = Ai * k;
+    int colStartC = Bj * k;
+
+    for (int i = 0; i < k && rowStartA + i < N; i++) {
+        for (int j = 0; j < k && colStartB + j < N; j++) {
             int sum = 0;
-            for (int x = 0; x < N; x++) {
-                sum += A[i][x] * B[x][j];
+            for (int x = 0; x < k && colStartA + x < N && rowStartB + x < N; x++) {
+                sum += A[rowStartA + i][colStartA + x] * B[rowStartB + x][colStartB + j];
             }
             pthread_mutex_lock(&mtx);
-            C[i][j] = sum;
+            C[rowStartC + i][colStartC + j] += sum;
             pthread_mutex_unlock(&mtx);
         }
     }
@@ -105,27 +114,29 @@ int main() {
     int bloksNum = (N + k - 1) / k; //в большую округляем если инвалидный блок
     vector<pthread_t> threads;
     
+    //цикл запуска комбинаций блоков по itj
     for (int i = 0; i < bloksNum; i++) {
         for (int j = 0; j < bloksNum; j++) {
-            int rowStart = i * k;
-            int colStart = j * k;
-            
-            ThreadData* data = new ThreadData;
-            data->rowStart = rowStart;
-            data->colStart = colStart;
-            data->k = k;
-            data->N = N;
-            data->A = &A;
-            data->B = &B;
-            data->C = &C;
-            
-            pthread_t threadID;
-            pthread_create(&threadID, nullptr, multiBlok, data);
-            threads.push_back(threadID);
+            for (int t = 0; t < bloksNum; t++) {
+                ThreadData* data = new ThreadData;
+
+                data->k = k;
+                data->N = N;
+                data->A = &A;
+                data->B = &B;
+                data->C = &C;
+                data->Ai = i;
+                data->Bj = j;
+                data->At = t;
+                
+                pthread_t threadID;
+                pthread_create(&threadID, nullptr, multiBlok, data);
+                threads.push_back(threadID);
+            }
         }
     }
     
-    for (int i = 0; i < threads.size(); i++) {
+    for (int i = 0; i < (int)threads.size(); i++) {
         pthread_join(threads[i], nullptr);
     }
     

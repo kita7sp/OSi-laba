@@ -26,19 +26,23 @@ void matrixPrint(int N, const vector<vector<int>>& A){
     }
 }
 
-void multiBlok(int rowStart, int colStart, int k, int N, const vector<vector<int>>& A, const vector<vector<int>>& B, vector<vector<int>>& C) {
-    
-    for (int i = rowStart; i < rowStart + k && i < N; i++) {
-        for (int j = colStart; j < colStart + k && j < N; j++) {
+void multiBlok(int Ai, int Bj, int At, int k, int N, const vector<vector<int>>& A, const vector<vector<int>>& B, vector<vector<int>>& C) {
+
+    int rowStartA = Ai * k;
+    int colStartA = At * k;
+    int rowStartB = At * k;
+    int colStartB = Bj * k;
+    int rowStartC = Ai * k;
+    int colStartC = Bj * k;
+
+    for (int i = 0; i < k && rowStartA + i < N; i++) {
+        for (int j = 0; j < k && colStartB + j < N; j++) {
             int sum = 0;
-            for (int x = 0; x < N; x++) {
-                sum += A[i][x] * B[x][j];
+            for (int x = 0; x < k && colStartA + x < N && rowStartB + x < N; x++) {
+                sum += A[rowStartA + i][colStartA + x] * B[rowStartB + x][colStartB + j];
             }
-            mtx.lock();
-            C[i][j] = sum;
-            mtx.unlock();
-            //lock_guard<mutex> lock(mtx);
-            //C[i][j] = sum;
+            lock_guard<mutex> lock(mtx);
+            C[rowStartC + i][colStartC + j] += sum;
         }
     }
 }
@@ -85,13 +89,13 @@ int main() {
     
     int bloksNum = (N + k - 1) / k; //в большую округляем если инвалидный блок
     vector<thread> threads;
-    
+
+    //цикл запуска комбинаций блоков по itj
     for (int i = 0; i < bloksNum; i++) {
         for (int j = 0; j < bloksNum; j++) {
-            int rowStart = i * k;
-            int colStart = j * k;
-            //стартуем потоки
-            threads.emplace_back(multiBlok, rowStart, colStart, k, N, ref(A), ref(B), ref(C));
+            for (int t = 0; t < bloksNum; t++) {
+                threads.emplace_back(multiBlok, i, j, t, k, N, ref(A), ref(B), ref(C));
+            }
         }
     }
     
